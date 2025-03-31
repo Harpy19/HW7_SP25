@@ -2,10 +2,11 @@
 import sys
 from ThermoStateCalc import Ui__frm_StateCalculator
 from pyXSteam.XSteam import XSteam
-from PyQt5.QtWidgets import QWidget, QApplication
+from PyQt5.QtWidgets import QWidget, QApplication, QMessageBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit, QComboBox, QPushButton
 from UnitConversion import UC
 from scipy.optimize import fsolve
-#endregion
+from PyQt5 import QtCore
+#endregion  # New imports have been added to solve the problem
 
 #region class definitions
 class thermoSatProps:
@@ -50,6 +51,7 @@ class thermoSatProps:
         self.hgf = self.hg - self.hf
         self.sgf = self.sg - self.sf
         self.ugf = self.ug - self.uf
+
 class thermoState:
     def __init__(self, p=None,t=None,v=None,u=None,h=None,s=None,x=None):
         """
@@ -539,21 +541,26 @@ class thermoState:
     def __sub__(self, other):
         delta = thermoState()
         delta.p=self.p-other.p
-        delta.t=self.t-other.timeData
+        delta.t=self.t-other.t # corrected code
         delta.h=self.h-other.h
         delta.u=self.u-other.u
         delta.s=self.s-other.s
         delta.v=self.v-other.v
         return delta
+
 class main_window(QWidget,Ui__frm_StateCalculator):
     def __init__(self):
         super().__init__()
+        self.le_Property1_state1 = None
+        self._grp_State1Specified = None
         self.setupUi(self)
         self.SetupSlotsAndSignals()
+        self.addTwoStateWidgets() # newly added for two-state operation
         self.steamTable=XSteam(XSteam.UNIT_SYSTEM_MKS)
         self.currentUnits='SI'
         self.setUnits()
         self.show()
+
     def SetupSlotsAndSignals(self):
         """
         I've modified the original to include a state2.  Here I assign slots to GUI actions.
@@ -561,9 +568,92 @@ class main_window(QWidget,Ui__frm_StateCalculator):
         """
         self._rdo_English.clicked.connect(self.setUnits)
         self._rdo_SI.clicked.connect(self.setUnits)
-        self._cmb_Property1.currentIndexChanged.connect(self.setUnits)
-        self._cmb_Property2.currentIndexChanged.connect(self.setUnits)
+        #self._cmb_Property1.currentIndexChanged.connect(self.setUnits)  # not in use anymore
+        #self._cmb_Property2.currentIndexChanged.connect(self.setUnits)  # not in use anymore
         self._pb_Calculate.clicked.connect(self.calculateProperties)
+
+    def addTwoStateWidgets(self):
+        """
+        This section will add the additional widgets to support two states.
+        :return:
+        """
+        # Removes original specified properties from layout
+        self.verticalLayout.removeWidget(self._grp_SpecifiedProperties)
+        self._grp_SpecifiedProperties.deleteLater()
+
+        # New specified properties
+        self._grp_SpecifiedProperties = QGroupBox("Specific Properties", self)
+        specPropsLayout = QVBoxLayout(self._grp_SpecifiedProperties)
+
+        # State 1 specified properties
+        self._grp_State1Specified = QGroupBox("State 1 Specified Properties", self._grp_SpecifiedProperties)
+        gridLayout_State1 = QGridLayout(self._grp_State1Specified)
+        lbl1 = QLabel("Property 1", self._grp_State1Specified)
+        gridLayout_State1.addWidget(lbl1, 0, 0)
+        self.cmb_Property1_state1 = QComboBox(self._grp_State1Specified)
+        self.cmb_Property1_state1.addItems(["Pressure (p)", "Temperature (T)", "Quality (x)",
+                                           "Specific Internal Energy (u)", "Specific Enthalpy (h)",
+                                           "Specific Volume (v)", "Specific Entropy (s)"])
+        gridLayout_State1.addWidget(self.cmb_Property1_state1, 1, 0, 1, 2)
+        self.le_Property_state1 = QLineEdit("1.0", self._grp_State1Specified)
+        gridLayout_State1.addWidget(self.le_Property_state1, 2, 0)
+        self.lbl_Property1_Units_state1 = QLabel("Bar", self._grp_State1Specified)
+        gridLayout_State1.addWidget(self.lbl_Property1_Units_state1, 2, 1)
+        lbl2 = QLabel("Property 2", self._grp_State1Specified)
+        gridLayout_State1.addWidget(lbl2, 0, 2)
+        self.cmb_Property2_state1 = QComboBox(self._grp_State1Specified)
+        self.cmb_Property2_state1.addItems(["Pressure (p)", "Temperature (T)", "Quality (x)",
+                                            "Specified Internal Energy (u)", "Specified Enthalpy (h)",
+                                            "Specified Volume (v)", "Specified Entropy (s)"])
+        gridLayout_State1.addWidget(self.cmb_Property2_state1, 1, 2, 1, 2)
+        self.le_Property2_state1 = QLineEdit("100.0", self._grp_State1Specified)
+        gridLayout_State1.addWidget(self.le_Property2_state1, 2, 2)
+        self.lbl_Property2_Units_state1 = QLabel("C", self._grp_State1Specified)
+        gridLayout_State1.addWidget(self.lbl_Property2_Units_state1, 2, 3)
+        specPropsLayout.addWidget(self._grp_State1Specified)
+
+        # State 2 specified properties
+        self._grp_State2Specified = QGroupBox("State 2 Specified Properties", self._grp_SpecifiedProperties)
+        gridLayout_State2 = QGridLayout(self._grp_State2Specified)
+        lbl3 = QLabel("Property 1", self._grp_State2Specified)
+        gridLayout_State2.addWidget(lbl3, 0, 0)
+        self.cmb_Property1_state2 = QComboBox(self._grp_State2Specified)
+        self.cmb_Property1_state2.addItems(["Pressure (p)", "Temperature (T)", "Quality (x)",
+                                            "Specified Internal Energy (u)", "Specific Enthalpy (h)",
+                                            "Specific Volume (v)", "Specific Entropy (s)"])
+        gridLayout_State2.addWidget(self.cmb_Property1_state2, 1, 0, 1, 2)
+        self.le_Property1_state2 = QLineEdit("1.0", self._grp_State2Specified)
+        gridLayout_State2.addWidget(self.le_Property1_state2, 2, 0)
+        self.lbl_Property1_Units_state2 = QLabel("Bar", self._grp_State2Specified)
+        gridLayout_State2.addWidget(self.lbl_Property1_Units_state2, 2, 1)
+        lbl4 = QLabel("Property 2", self._grp_State2Specified)
+        gridLayout_State2.addWidget(lbl4, 0, 2)
+        self.cmb_Property2_state2 = QComboBox(self._grp_State2Specified)
+        self.cmb_Property2_state2.addItems(["Pressure (p)", "Temperature (T)", "Quality (x)",
+                                           "Specific Internal Energy (u)", "Specific Enthalpy (h)",
+                                           "Specific Volume (v)", "Specific Entropy (s)"])
+        gridLayout_State2.addWidget(self.cmb_Property2_state2, 1, 2, 1, 2)
+        self.le_Property2_state2 = QLineEdit("100.0", self._grp_State2Specified)
+        gridLayout_State2.addWidget(self.le_Property2_state2, 2, 2)
+        self.lbl_Property2_Units_state2 = QLabel("C", self._grp_State2Specified)
+        gridLayout_State2.addWidget(self.lbl_Property2_Units_state2, 2, 3)
+        specPropsLayout.addWidget(self._grp_State2Specified)
+
+        # Inserting new properties group into the main vertical layout
+        self.verticalLayout.insertWidget(1, self._grp_SpecifiedProperties)
+
+        # Replacing original state properties layout
+        self.verticalLayout.removeWidget(self._grp_StateProperties)
+        self._grp_StateProperties.deleteLater()
+        self._grp_StateProperties = QGroupBox("Specific Properties", self)
+        hLayout_StateProps = QHBoxLayout(self._grp_StateProperties)
+        self.lbl_State1Properties = QLabel("State 1 Properties", self._grp_StateProperties)
+        self.lbl_State2Properties = QLabel("State 2 Properties", self._grp_StateProperties)
+        self.lbl_DeltaProperties = QLabel("Delta Properties", self._grp_StateProperties)
+        hLayout_StateProps.addWidget(self.lbl_State1Properties)
+        hLayout_StateProps.addWidget(self.lbl_State2Properties)
+        hLayout_StateProps.addWidget(self.lbl_DeltaProperties)
+        self.verticalLayout.addWidget(self._grp_StateProperties)
 
     def setUnits(self):
         """
@@ -604,76 +694,185 @@ class main_window(QWidget,Ui__frm_StateCalculator):
             self.v_Units = "ft^3/lb"
 
         #read selected Specified Properties from combo boxes
-        SpecifiedProperty1 = self._cmb_Property1.currentText()
-        SpecifiedProperty2 = self._cmb_Property2.currentText()
+        #SpecifiedProperty1 = self._cmb_Property1.currentText()  # Not using
+        #SpecifiedProperty2 = self._cmb_Property2.currentText()  # Not using
         #read numerical values for selected properties
-        SP=[float(self._le_Property1.text()), float(self._le_Property2.text())]
+        #SP=[float(self._le_Property1.text()), float(self._le_Property2.text())]  # Not using
 
         #region set units labels and convert values if needed for state 1
-        #region property 1
-        if 'Pressure' in SpecifiedProperty1:
-            self._lbl_Property1_Units.setText(self.p_Units)
+        # State 1 Property 1
+        if 'Pressure' in self.cmb_Property1_state1.currentText():
+            self.lbl_Property1_Units_state1.setText(self.p_Units)
             if UnitChange:  # note that I only should convert if needed.  Not if I double click on SI or English
-                SP[0]=SP[0]*UC.psi_to_bar if SI else SP[0]*UC.bar_to_psi
-        elif 'Temperature' in SpecifiedProperty1:
-            self._lbl_Property1_Units.setText(self.t_Units)
+                #SP[0]=SP[0]*UC.psi_to_bar if SI else SP[0]*UC.bar_to_psi
+                val = float(self.le_Property1_state1.text())
+                new_val = val * UC.psi_to_bar if SI else val * UC.bar_to_psi
+                self.le_Property1_state1.setText("{:0.3f}".format(new_val))
+        elif 'Temperature' in self.cmb_Property1_state1.currentText():
+            self.lbl_Property1_Units_state1.setText(self.t_Units)
             if UnitChange:
-                SP[0] = UC.F_to_C(SP[0]) if SI else UC.C_to_F(SP[0])
-        elif 'Energy' in SpecifiedProperty1:
-            self._lbl_Property1_Units.setText(self.u_Units)
+                #SP[0] = UC.F_to_C(SP[0]) if SI else UC.C_to_F(SP[0])
+                val = float(self.le_Property1_state1.text())
+                new_val = UC.F_to_C(val) if SI else UC.C_to_F(val)
+                self.le_Property1_state1.setText("{:0.3f}".format(new_val))
+        elif 'Energy' in self.cmb_Property1_state1.currentText():
+            self.lbl_Property1_Units_state1.setText(self.u_Units)
             if UnitChange:
-                SP[0]=SP[0]*UC.btuperlb_to_kJperkg if SI else SP[0]*UC.kJperkg_to_btuperlb
-        elif 'Enthalpy' in SpecifiedProperty1:
-            self._lbl_Property1_Units.setText(self.h_Units)
+                #SP[0]=SP[0]*UC.btuperlb_to_kJperkg if SI else SP[0]*UC.kJperkg_to_btuperlb
+                val = float(self.le_Property1_state1.text())
+                new_val = val * UC.btuperlb_to_kJperkg if SI else val * UC.kJperkg_to_btuperlb
+                self.le_Property1_state1.setText("{:0.3f}".format(new_val))
+        elif 'Enthalpy' in self.cmb_Property1_state1.currentText():
+            self.lbl_Property1_Units_state1.setText(self.h_Units)
             if UnitChange:
-                SP[0] = SP[0] * UC.btuperlb_to_kJperkg if SI else SP[0] * UC.kJperkg_to_btuperlb
-        elif 'Entropy' in SpecifiedProperty1:
-            self._lbl_Property1_Units.setText(self.s_Units)
+                #SP[0] = SP[0] * UC.btuperlb_to_kJperkg if SI else SP[0] * UC.kJperkg_to_btuperlb
+                val = float(self.le_Property1_state1.text())
+                new_val = val * UC.btuperlb_to_kJperkg if SI else val * UC.kJperkg_to_btuperlb
+                self.le_Property1_state1.setText("{:0.3f}".format(new_val))
+        elif 'Entropy' in self.cmb_Property1_state1.currentText():
+            self.lbl_Property1_Units_state1.setText(self.s_Units)
             if UnitChange:
-                SP[0] = SP[0] * UC.btuperlbF_to_kJperkgC if SI else SP[0] * UC.kJperkgC_to_btuperlbF
-        elif 'Volume' in SpecifiedProperty1:
-            self._lbl_Property1_Units.setText(self.v_Units)
+                #SP[0] = SP[0] * UC.btuperlbF_to_kJperkgC if SI else SP[0] * UC.kJperkgC_to_btuperlbF
+                val = float(self.le_Property1_state1.text())
+                new_val = val * UC.btuperlbF_to_kJperkgC if SI else val * UC.kJperkgc_to_btuperlbF
+                self.le_Property1_state1.setText("{:0.3f}".format(new_val))
+        elif 'Volume' in self.cmb_Property1_state1.currentText():
+            self.lbl_Property1_Units_state1.setText(self.v_Units)
             if UnitChange:
-                SP[0]=SP[0]*UC.ft3perlb_to_m3perkg if SI else SP[0]*UC.m3perkg_to_ft3perlb
-        elif 'Quality' in SpecifiedProperty1:
-            self._lbl_Property1_Units.setText("")
+                #SP[0]=SP[0]*UC.ft3perlb_to_m3perkg if SI else SP[0]*UC.m3perkg_to_ft3perlb
+                val = float(self.le_Property1_state1.text())
+                new_val = val * UC.ft3perlb_to_m3perkg if SI else val * UC.m3perkg_to_ft3perlb
+                self.le_Property1_state1.setText("{:0.3f}".format(new_val))
+        elif 'Quality' in self.cmb_Property1_state1.currentText():
+            self.lbl_Property1_Units_state1.setText("")
         #endregion
-        #region property 2
-        if 'Pressure' in SpecifiedProperty2:
-            self._lbl_Property2_Units.setText(self.p_Units)
+        # State 1 Property 2
+        if 'Pressure' in self.cmb_Property2_state1.currentText():
+            self.lbl_Property2_Units_state1.setText(self.p_Units)
             if UnitChange:
-                SP[1] = SP[1] * UC.psi_to_bar if SI else SP[1] * UC.bar_to_psi
-        elif 'Temperature' in SpecifiedProperty2:
-            self._lbl_Property2_Units.setText(self.t_Units)
+                val = float(self.le_Property2_state1.text())
+                new_val = val * UC.psi_to_bar if SI else val * UC.bar_to_psi
+                self.le_Property2_state1.setText("{:0.3f}".format(new_val))
+        elif 'Temperature' in self.cmb_Property2_state1.currentText():
+            self.lbl_Property2_Units_state1.setText(self.t_Units)
             if UnitChange:
-                SP[1] = UC.F_to_C(SP[1]) if SI else UC.C_to_F(SP[1])
-        elif 'Energy' in SpecifiedProperty2:
-            self._lbl_Property2_Units.setText(self.u_Units)
+                val = float(self.le_Property2_state1.text())
+                new_val = UC.F_to_C(val) if SI else UC.C_to_F(val)
+                self.le_Property2_state1.setText("{:0.3f}".format(new_val))
+        elif 'Energy' in self.cmb_Property2_state1.currentText():
+            self.lbl_Property2_Units_state1.setText(self.u_Units)
             if UnitChange:
-                SP[1] = SP[1] * UC.btuperlb_to_kJperkg if SI else SP[1] * UC.kJperkg_to_btuperlb
-        elif 'Enthalpy' in SpecifiedProperty2:
-            self._lbl_Property2_Units.setText(self.h_Units)
+                val = float(self.le_Property2_state1.text())
+                new_val = val * UC.btuperlb_to_kJperkg if SI else val * UC.kJperkg_to_btuperlb
+                self.le_Property2_state1.setText("{:0.3f}".format(new_val))
+        elif 'Enthalpy' in self.cmb_Property2_state1.currentText():
+            self.lbl_Property2_Units_state1.setText(self.h_Units)
             if UnitChange:
-                SP[1] = SP[1] * UC.btuperlb_to_kJperkg if SI else SP[1] * UC.kJperkg_to_btuperlb
-        elif 'Entropy' in SpecifiedProperty2:
-            self._lbl_Property2_Units.setText(self.s_Units)
+                val = float(self.le_Property2_state1.text())
+                new_val = val * UC.btuperlb_to_kJperkg if SI else val * UC.kJperkg_to_btuperlb
+                self.le_Property2_state1.setText("{:0.3f}".format(new_val))
+        elif 'Entropy' in self.cmb_Property2_state1.currentText():
+            self.lbl_Property2_Units_state1.setText(self.s_Units)
             if UnitChange:
-                SP[1] = SP[1] * UC.btuperlbF_to_kJperkgC if SI else SP[1] * UC.kJperkgC_to_btuperlbF
-        elif 'Volume' in SpecifiedProperty2:
-            self._lbl_Property2_Units.setText(self.v_Units)
+                val = float(self.le_Property2_state1.text())
+                new_val = val * UC.btuperlbF_to_kJperkgC if SI else val * UC.kJperkgc_to_btuperlbF
+                self.le_Property2_state1.setText("{:0.3f}".format(new_val))
+        elif 'Volume' in self.cmb_Property2_state1.currentText():
+            self.lbl_Property2_Units_state1.setText(self.v_Units)
             if UnitChange:
-                SP[1] = SP[1] * UC.ft3perlb_to_m3perkg if SI else SP[1] * UC.m3perkg_to_ft3perlb
-        elif 'Quality' in SpecifiedProperty2:
-            self._lbl_Property2_Units.setText("")
+                val = float(self.le_Property2_state1.text())
+                new_val = val * UC.ft3perlb_to_m3perkg if SI else val * UC.m3perkg_to_ft3perlb
+                self.le_Property2_state1.setText("{:0.3f}".format(new_val))
+        elif 'Quality' in self.cmb_Property2_state1.currentText():
+            self.lbl_Property2_Units_state1.setText("")
         #endregion
+        #State 2, Property 1
+        if 'Pressure' in self.cmb_Property1_state2.currentText():
+            self.lbl_Property1_Units_state2.setText(self.p_Units)
+            if UnitChange:
+                val = float(self.le_Property1_state2.text())
+                new_val = val * UC.psi_to_bar if SI else val * UC.bar_to_psi
+                self.le_Property1_state2.setText("{:0.3f}".format(new_val))
+        elif 'Temperature' in self.cmb_Property1_state2.currentText():
+            self.lbl_Property1_Units_state2.setText(self.t_Units)
+            if UnitChange:
+                val = float(self.le_Property1_state2.text())
+                new_val = UC.F_to_C(val) if SI else UC.C_to_F(val)
+                self.le_Property1_state2.setText("{:0.3f}".format(new_val))
+        elif 'Energy' in self.cmb_Property1_state2.currentText():
+            self.lbl_Property1_Units_state2.setText(self.u_Units)
+            if UnitChange:
+                val = float(self.le_Property1_state2.text())
+                new_val = val * UC.btuperlb_to_kJperkg if SI else val * UC.kJperkg_to_btuperlb
+                self.le_Property1_state2.setText("{:0.3f}".format(new_val))
+        elif 'Enthalpy' in self.cmb_Property1_state2.currentText():
+            self.lbl_Property1_Units_state2.setText(self.h_Units)
+            if UnitChange:
+                val = float(self.le_Property1_state2.text())
+                new_val = val * UC.btuperlb_to_kJperkg if SI else val * UC.kJperkg_to_btuperlb
+                self.le_Property1_state2.setText("{:0.3f}".format(new_val))
+        elif 'Entropy' in self.cmb_Property1_state2.currentText():
+            self.lbl_Property1_Units_state2.setText(self.s_Units)
+            if UnitChange:
+                val = float(self.le_Property1_state2.text())
+                new_val = val * UC.btuperlbF_to_kJperkgC if SI else val * UC.kJperkgc_to_btuperlbF
+                self.le_Property1_state2.setText("{:0.3f}".format(new_val))
+        elif 'Volume' in self.cmb_Property1_state2.currentText():
+            self.lbl_Property1_Units_state2.setText(self.v_Units)
+            if UnitChange:
+                val = float(self.le_Property1_state2.text())
+                new_val = val * UC.ft3perlb_to_m3perkg if SI else val * UC.m3perkg_to_ft3perlb
+                self.le_Property1_state2.setText("{:0.3f}".format(new_val))
+        elif 'Quality' in self.cmb_Property1_state2.currentText():
+            self.lbl_Property1_Units_state2.setText("")
 
-        self._le_Property1.setText("{:0.3f}".format(SP[0]))
-        self._le_Property2.setText("{:0.3f}".format(SP[1]))
+        #State 2 Property 2
+        if 'Pressure' in self.cmb_Property2_state2.currentText():
+            self.lbl_Property2_Units_state2.setText(self.p_Units)
+            if UnitChange:
+                val = float(self.le_Property2_state2.text())
+                new_val = val * UC.psi_to_bar if SI else val * UC.bar_to_psi
+                self.le_Property2_state2.setText("{:0.3f}".format(new_val))
+        elif 'Temperature' in self.cmb_Property2_state2.currentText():
+            self.lbl_Property2_Units_state2.setText(self.t_Units)
+            if UnitChange:
+                val = float(self.le_Property2_state2.text())
+                new_val = UC.F_to_C(val) if SI else UC.C_to_F(val)
+                self.le_Property2_state2.setText("{:0.3f}".format(new_val))
+        elif 'Energy' in self.cmb_Property2_state2.currentText():
+            self.lbl_Property2_Units_state2.setText(self.u_Units)
+            if UnitChange:
+                val = float(self.le_Property2_state2.text())
+                new_val = val * UC.btuperlb_to_kJperkg if SI else val * UC.kJperkg_to_btuperlb
+                self.le_Property2_state2.setText("{:0.3f}".format(new_val))
+        elif 'Enthalpy' in self.cmb_Property2_state2.currentText():
+            self.lbl_Property2_Units_state2.setText(self.h_Units)
+            if UnitChange:
+                val = float(self.le_Property2_state2.text())
+                new_val = val * UC.btuperlb_to_kJperkg if SI else val * UC.kJperkg_to_btuperlb
+                self.le_Property2_state2.setText("{:0.3f}".format(new_val))
+        elif 'Entropy' in self.cmb_Property2_state2.currentText():
+            self.lbl_Property2_Units_state2.setText(self.s_Units)
+            if UnitChange:
+                val = float(self.le_Property2_state2.text())
+                new_val = val * UC.btuperlbF_to_kJperkgC if SI else val * UC.kJperkgc_to_btuperlbF
+                self.le_Property2_state2.setText("{:0.3f}".format(new_val))
+        elif 'Volume' in self.cmb_Property2_state2.currentText():
+            self.lbl_Property2_Units_state2.setText(self.v_Units)
+            if UnitChange:
+                val = float(self.le_Property2_state2.text())
+                new_val = val * UC.ft3perlb_to_m3perkg if SI else val * UC.m3perkg_to_ft3perlb
+                self.le_Property2_state2.setText("{:0.3f}".format(new_val))
+        elif 'Quality' in self.cmb_Property2_state2.currentText():
+            self.lbl_Property2_Units_state2.setText("")
+
+        #self._le_Property1.setText("{:0.3f}".format(SP[0]))
+        #self._le_Property2.setText("{:0.3f}".format(SP[1]))
         #endregion
 
     def clamp(self, x, low, high):
         """
-        This clamps a float x between a high and low limit inclusive
+        This clamps a float x between a high a2d low limit inclusive
         :param x:
         :param low:
         :param high:
